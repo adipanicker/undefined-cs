@@ -7,6 +7,7 @@ import Avatar from "../components/Avatar";
 import AddHeadsUp from "../components/AddHeadsUp";
 import HeadsUpCard from "../components/HeadsUpCard";
 import Calendar from "../components/Calendar";
+import { Link } from "react-router-dom";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -24,6 +25,7 @@ export default function Home() {
   const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState("ALL");
   const [adding, setAdding] = useState(false);
+  const [remaining, setRemaining] = useState(null);
   const [version, setVersion] = useState(0);
 
   const load = useCallback(async () => {
@@ -43,6 +45,22 @@ export default function Home() {
     setVersion((v) => v + 1);
   }, []);
 
+  // How many quests are still open (same logic as the My Quests page)
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      supabase.from("heads_ups").select("id").not("event_date", "is", null),
+      supabase.from("completions").select("heads_up_id"),
+    ]).then(([hu, cp]) => {
+      if (cancelled || hu.error || cp.error) return;
+      const handled = new Set(cp.data.map((c) => c.heads_up_id));
+      setRemaining(hu.data.filter((h) => !handled.has(h.id)).length);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [version]);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -57,24 +75,36 @@ export default function Home() {
       return 0;
     });
 
+  const questLabel = "🎯 My Quests →";
+
   return (
     <div className="space-y-5">
       <div
-        className="card flex items-center gap-4 p-4"
+        className="card space-y-3 p-4"
         style={{ background: "var(--yellow)", color: "var(--on-pastel)" }}
       >
-        <Avatar avatar={profile.avatar} size={64} />
-        <div className="min-w-0">
-          <div className="text-sm font-medium">
-            {g.text} {g.emoji}
+        <div className="flex items-center gap-4">
+          <Avatar avatar={profile.avatar} size={64} />
+          <div className="min-w-0">
+            <div className="text-sm font-medium">
+              {g.text} {g.emoji}
+            </div>
+            <div className="truncate text-2xl font-bold">{profile.name}</div>
           </div>
-          <div className="truncate text-2xl font-bold">{profile.name}</div>
         </div>
+
+        <Link
+          to="/quests"
+          className="btn block w-full text-center"
+          style={{ background: "var(--surface)", color: "var(--ink)" }}
+        >
+          {questLabel}
+        </Link>
       </div>
 
       <Calendar version={version} />
 
-      <button className="btn w-full text-lg" onClick={() => setAdding(true)}>
+      <button className="btn w-full text-lg " onClick={() => setAdding(true)}>
         ＋ Drop a heads-up
       </button>
 
