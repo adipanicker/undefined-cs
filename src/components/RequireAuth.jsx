@@ -15,8 +15,8 @@ export default function RequireAuth({ children }) {
     return (
       <div className="mx-auto max-w-md p-6">
         <div className="card space-y-4 p-5 text-center">
-          <div className="text-4xl">😵</div>
-          <p>Couldn't load your profile.</p>
+          <div className="text-4xl">🔥</div>
+          <p>Loading your profile..</p>
           <button className="btn" onClick={signOut}>
             Log out
           </button>
