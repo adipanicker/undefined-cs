@@ -1,0 +1,138 @@
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../context/AuthContext";
+import { SUBJECTS } from "../lib/constants";
+import { todayStr } from "../lib/dates";
+import Avatar from "../components/Avatar";
+import AddHeadsUp from "../components/AddHeadsUp";
+import HeadsUpCard from "../components/HeadsUpCard";
+import Calendar from "../components/Calendar";
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return { text: "Good Morning", emoji: "☀️" };
+  if (h < 17) return { text: "Good Afternoon", emoji: "🌤️" };
+  return { text: "Good Evening", emoji: "🌙" };
+}
+
+export default function Home() {
+  const { profile, refreshProfile } = useAuth();
+  const g = getGreeting();
+
+  const [items, setItems] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [filter, setFilter] = useState("ALL");
+  const [adding, setAdding] = useState(false);
+  const [version, setVersion] = useState(0);
+
+  const load = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("heads_ups")
+      .select("*, author:profiles!heads_ups_created_by_fkey(name, avatar)")
+      .or(`event_date.gte.${todayStr()},event_date.is.null`)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setLoadError(true);
+    } else {
+      setItems(data);
+      setLoadError(false);
+    }
+    setLoaded(true);
+    setVersion((v) => v + 1);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const shown = items
+    .filter((i) => filter === "ALL" || i.subject === filter)
+    .sort((a, b) => {
+      if (a.event_date && b.event_date)
+        return a.event_date.localeCompare(b.event_date);
+      if (a.event_date) return -1;
+      if (b.event_date) return 1;
+      return 0;
+    });
+
+  return (
+    <div className="space-y-5">
+      <div
+        className="card flex items-center gap-4 p-4"
+        style={{ background: "var(--yellow)", color: "var(--on-pastel)" }}
+      >
+        <Avatar avatar={profile.avatar} size={64} />
+        <div className="min-w-0">
+          <div className="text-sm font-medium">
+            {g.text} {g.emoji}
+          </div>
+          <div className="truncate text-2xl font-bold">{profile.name}</div>
+        </div>
+      </div>
+
+      <Calendar version={version} />
+
+      <button className="btn w-full text-lg" onClick={() => setAdding(true)}>
+        ＋ Drop a heads-up
+      </button>
+
+      <div>
+        <h2 className="mb-3 text-xl font-bold">📣 Upcoming wall</h2>
+
+        <div className="no-scrollbar -mx-1 mb-4 flex gap-2 overflow-x-auto p-2">
+          {[{ code: "ALL", label: "All", emoji: "✨" }, ...SUBJECTS].map(
+            (s) => (
+              <button
+                key={s.code}
+                className="chip shrink-0 text-sm"
+                style={{ padding: "0.4rem 0.8rem" }}
+                aria-pressed={filter === s.code}
+                onClick={() => setFilter(s.code)}
+              >
+                {s.emoji} {s.label}
+              </button>
+            ),
+          )}
+        </div>
+
+        {!loaded && <div className="py-8 text-center text-4xl">⏳</div>}
+
+        {loadError && (
+          <div className="alert">
+            Couldn't load the wall. Refresh and try again
+          </div>
+        )}
+
+        {loaded && !loadError && shown.length === 0 && (
+          <div className="card p-6 text-center">
+            <div className="text-4xl">🎉</div>
+            <p className="mt-2 font-semibold">Nothing coming up here</p>
+            <p style={{ color: "var(--muted)" }}>Enjoy it while it lasts</p>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          {shown.map((item) => (
+            <HeadsUpCard
+              key={item.id}
+              item={item}
+              mine={item.created_by === profile.id}
+              onDeleted={() => {
+                load();
+                refreshProfile();
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      <AddHeadsUp
+        open={adding}
+        onClose={() => setAdding(false)}
+        onAdded={load}
+      />
+    </div>
+  );
+}
