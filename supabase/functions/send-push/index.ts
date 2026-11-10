@@ -110,6 +110,7 @@ function buildMessage(record: any, authorName: string) {
 async function sendTo(subs: any[], payload: unknown) {
   const text = JSON.stringify(payload);
   const dead: string[] = [];
+  const failed: { status?: number; body?: string }[] = [];
   let sent = 0;
 
   await Promise.all(
@@ -122,22 +123,26 @@ async function sendTo(subs: any[], payload: unknown) {
         );
         sent++;
       } catch (err: any) {
-        // 404/410 = the device is gone (uninstalled, permission revoked). Clean it up.
-        if (err?.statusCode === 404 || err?.statusCode === 410)
+        if (err?.statusCode === 404 || err?.statusCode === 410) {
           dead.push(s.endpoint);
-        else
+        } else {
           console.error(
             "push failed",
             err?.statusCode,
             err?.body ?? err?.message,
           );
+          failed.push({
+            status: err?.statusCode,
+            body: String(err?.body ?? err?.message ?? "").slice(0, 120),
+          });
+        }
       }
     }),
   );
 
   if (dead.length)
     await admin.from("push_subscriptions").delete().in("endpoint", dead);
-  return { sent, removed: dead.length };
+  return { sent, removed: dead.length, failed };
 }
 
 Deno.serve(async (req) => {

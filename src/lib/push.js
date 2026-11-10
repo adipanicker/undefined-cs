@@ -18,27 +18,66 @@ async function getRegistration() {
 
 // Makes sure this device has a subscription and that the server knows about it.
 // Safe to call on every app start.
-export async function ensurePushSubscription() {
+function sameKey(sub, keyBytes) {
+  const current = sub.options?.applicationServerKey;
+  if (!current) return true;
+  const a = new Uint8Array(current);
+  return a.length === keyBytes.length && a.every((v, i) => v === keyBytes[i]);
+}
+
+let lastError = "";
+export const getPushError = () => lastError;
+
+export async function ensurePushSubscription({ fresh = false } = {}) {
+  lastError = "";
   try {
-    if (
-      !pushSupported() ||
-      !VAPID_PUBLIC_KEY ||
-      Notification.permission !== "granted"
-    ) {
+    if (!pushSupported()) {
+      lastError = "this browser has no push support";
       return false;
     }
-    const reg = await getRegistration();
-    if (!reg) return false;
+    if (!VAPID_PUBLIC_KEY) {
+      lastError = "VITE_VAPID_PUBLIC_KEY is missing in this build";
+      return false;
+    }
+    if (Notification.permission !== "granted") {
+      lastError = `permission is ${Notification.permission}`;
+      return false;
+    }
 
-    const subscribe = () =>
-      reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-      });
+    const key = VAPID_PUBLIC_KEY.trim();
+    let keyBytes;
+    try {
+      keyBytes = urlBase64ToUint8Array(key);
+    } catch {
+      lastError = "public key is not valid base64";
+      return false;
+    }
+    if (keyBytes.length !== 65) {
+      lastError = `public key decodes to ${keyBytes.length} bytes (must be 65)`;
+      return false;
+    }
+
+    const reg = await getRegistration();
+    if (!reg) {
+      lastError = "service worker never became ready";
+      return false;
+    }
 
     let sub = await reg.pushManager.getSubscription();
+    if (sub && (fresh || !sameKey(sub, keyBytes))) {
+      await sub.unsubscribe();
+      sub = null;
+    }
     if (!sub) {
-      sub = await subscribe();
+      try {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: keyBytes,
+        });
+      } catch (e) {
+        lastError = `subscribe failed: ${e.name}: ${e.message}`;
+        return false;
+      }
     }
 
     const json = sub.toJSON();
@@ -48,8 +87,13 @@ export async function ensurePushSubscription() {
       p_auth: json.keys.auth,
       p_user_agent: navigator.userAgent.slice(0, 200),
     });
-    return !error;
-  } catch {
+    if (error) {
+      lastError = `database save failed: ${error.message}`;
+      return false;
+    }
+    return true;
+  } catch (e) {
+    lastError = `unexpected: ${e?.message ?? e}`;
     return false;
   }
 }
@@ -74,9 +118,26 @@ export async function sendTestPush() {
     const { data, error } = await supabase.functions.invoke("send-push", {
       body: { test: true },
     });
-    if (error) return { ok: false, sent: 0 };
-    return { ok: (data?.sent ?? 0) > 0, sent: data?.sent ?? 0 };
-  } catch {
-    return { ok: false, sent: 0 };
+    if (error) {
+      return {
+        ok: false,
+        sent: 0,
+        stale: false,
+        detail: `function error: ${error.message ?? "unknown"}`,
+      };
+    }
+    const sent = data?.sent ?? 0;
+    const first = data?.failed?.[0];
+    let detail = "";
+    if (!sent) {
+      detail = first
+        ? `push service said ${first.status ?? "?"} ${first.body ?? ""}`
+        : data?.removed
+          ? "this device was stale"
+          : "the server has no subscription for you";
+    }
+    return { ok: sent > 0, sent, stale: !!data?.removed, detail };
+  } catch (e) {
+    return { ok: false, sent: 0, stale: false, detail: String(e) };
   }
 }

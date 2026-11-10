@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { notifPermission, pushSupported } from "../lib/pwa";
-import { ensurePushSubscription, sendTestPush } from "../lib/push";
+import {
+  ensurePushSubscription,
+  sendTestPush,
+  getPushError,
+} from "../lib/push";
 
 export default function NotificationsCard() {
   const [busy, setBusy] = useState(false);
@@ -16,15 +20,20 @@ export default function NotificationsCard() {
       setBusy(false);
       return setMsg({
         ok: false,
-        text: "Couldn't register this device. Reload the app and try again",
+        text: `Couldn't register this device: ${getPushError() || "unknown"}`,
       });
     }
-    const { ok } = await sendTestPush();
+
+    let res = await sendTestPush();
+    if (!res.ok && res.stale) {
+      await ensurePushSubscription({ fresh: true });
+      res = await sendTestPush();
+    }
     setBusy(false);
     setMsg(
-      ok
+      res.ok
         ? { ok: true, text: "Sent! Check your notifications 🔔" }
-        : { ok: false, text: "The server could not reach this device" },
+        : { ok: false, text: `Couldn't deliver: ${res.detail}` },
     );
   }
 
