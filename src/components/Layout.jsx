@@ -1,9 +1,13 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../lib/theme";
+import { needsSetup, SETUP_KEY } from "../lib/pwa";
+import { ensurePushSubscription } from "../lib/push";
 import Avatar from "./Avatar";
+import DailyReward from "./DailyReward";
+import Onboarding from "./Onboarding";
 
 const NAV = [
   { to: "/", label: "Home", emoji: "🏠", end: true },
@@ -13,8 +17,33 @@ const NAV = [
 
 export default function Layout() {
   const [open, setOpen] = useState(false);
+  const [rewardDone, setRewardDone] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
   const { profile } = useAuth();
   const [theme, toggleTheme] = useTheme();
+
+  const markRewardDone = useCallback(() => setRewardDone(true), []);
+  // Re-sync this device's push subscription on every app start
+  useEffect(() => {
+    ensurePushSubscription();
+  }, [profile.id]);
+
+  // Auto-open the setup sheet once, after the daily reward is out of the way
+  useEffect(() => {
+    if (rewardDone && !localStorage.getItem(SETUP_KEY) && needsSetup()) {
+      setSetupOpen(true);
+    }
+  }, [rewardDone]);
+
+  function closeSetup(completed) {
+    localStorage.setItem(SETUP_KEY, completed ? "done" : "later");
+    setSetupOpen(false);
+  }
+
+  function openSetup() {
+    setOpen(false);
+    setSetupOpen(true);
+  }
 
   return (
     <div className="min-h-screen">
@@ -100,7 +129,16 @@ export default function Layout() {
               ))}
             </nav>
 
-            <div className="mt-auto">
+            <div className="mt-auto space-y-3">
+              {needsSetup() && (
+                <button
+                  className="btn w-full"
+                  style={{ background: "var(--lavender)" }}
+                  onClick={openSetup}
+                >
+                  📲 Install & notifications
+                </button>
+              )}
               <button
                 className="btn w-full"
                 style={{ background: "var(--surface)", color: "var(--ink)" }}
@@ -112,6 +150,9 @@ export default function Layout() {
           </motion.aside>
         )}
       </AnimatePresence>
+
+      <DailyReward onFinished={markRewardDone} />
+      <Onboarding open={setupOpen} onClose={closeSetup} />
     </div>
   );
 }

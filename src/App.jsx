@@ -5,6 +5,7 @@ import Home from "./pages/Home";
 import Quests from "./pages/Quests";
 import Profile from "./pages/Profile";
 import Layout from "./components/Layout";
+import ResetPin from "./pages/ResetPin";
 import RequireAuth from "./components/RequireAuth";
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
       </Route>
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/reset-pin" element={<ResetPin />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

@@ -5,6 +5,9 @@ import "./index.css";
 import "./lib/theme";
 import App from "./App.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
+import { registerServiceWorker } from "./lib/pwa";
+
+registerServiceWorker();
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>

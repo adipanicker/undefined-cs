@@ -59,7 +59,7 @@ export default function HeadsUpCard({ item, mine, onDeleted }) {
           </div>
         )}
         {item.description && (
-          <p className="mt-2 whitespace-pre-wrap break-words">
+          <p className="mt-2 whitespace-pre-wrap wrap-break-word">
             {item.description}
           </p>
         )}

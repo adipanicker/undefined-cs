@@ -1,5 +1,12 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { supabase } from "../lib/supabase";
+import { removeThisDevice } from "../lib/push";
 
 const AuthContext = createContext(null);
 
@@ -46,7 +53,7 @@ export function AuthProvider({ children }) {
 
   const loading = !sessionChecked || (!!userId && profileDoneFor !== userId);
 
-  async function refreshProfile() {
+  const refreshProfile = useCallback(async () => {
     if (!userId) return;
     const { data } = await supabase
       .from("profiles")
@@ -54,14 +61,17 @@ export function AuthProvider({ children }) {
       .eq("id", userId)
       .single();
     setProfile(data ?? null);
-  }
+  }, [userId]);
 
   const value = {
     session,
     profile,
     loading,
     refreshProfile,
-    signOut: () => supabase.auth.signOut(),
+    signOut: async () => {
+      await removeThisDevice();
+      await supabase.auth.signOut();
+    },
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

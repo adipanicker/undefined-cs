@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { parseAvatar } from "../lib/constants";
+import NotificationsCard from "../components/NotificationsCard";
 import Avatar from "../components/Avatar";
 import AvatarPicker from "../components/AvatarPicker";
 
@@ -199,6 +200,7 @@ export default function Profile() {
           {saving ? "Saving…" : "Save changes"}
         </button>
       </form>
+      <NotificationsCard />
 
       <button
         className="btn w-full"
