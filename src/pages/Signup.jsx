@@ -226,8 +226,7 @@ export default function Signup() {
             />
           </div>
           <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
-            Only day and month are saved, never the year. Used so the class can
-            send you wishes.
+            Only day and month are saved. Used so the class can send you wishes.
           </p>
         </div>
 
