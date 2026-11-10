@@ -2,17 +2,13 @@ import { useState } from "react";
 
 const KEY = "undefined-cs-theme";
 
-// Apply the saved choice before React renders, so there's no flash
+// Apply saved choice before React renders
 const saved = localStorage.getItem(KEY);
-if (saved) document.documentElement.dataset.theme = saved;
+document.documentElement.dataset.theme = saved || "light";
 
 export function useTheme() {
   const [theme, setTheme] = useState(
-    () =>
-      document.documentElement.dataset.theme ||
-      (window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light"),
+    () => localStorage.getItem(KEY) || "light",
   );
 
   const toggle = () => {
