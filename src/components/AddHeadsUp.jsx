@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "../lib/supabase";
-import { SUBJECTS, TYPES } from "../lib/constants";
+import { TYPES } from "../lib/constants";
+import { useSemester } from "../context/SemesterContext";
 import { todayStr } from "../lib/dates";
 
 const EMPTY = {
@@ -13,6 +14,7 @@ const EMPTY = {
 };
 
 export default function AddHeadsUp({ open, onClose, onAdded, editing = null }) {
+  const { subjects } = useSemester();
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -30,9 +32,9 @@ export default function AddHeadsUp({ open, onClose, onAdded, editing = null }) {
             description: editing.description ?? "",
             date: editing.event_date ?? "",
           }
-        : EMPTY,
+        : { ...EMPTY, subject: subjects[0]?.code ?? "OTHER" },
     );
-  }, [open, editing]);
+  }, [open, editing, subjects]);
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const needsDate = form.type !== "info";
@@ -150,7 +152,7 @@ export default function AddHeadsUp({ open, onClose, onAdded, editing = null }) {
             <div>
               <label className="label">Subject</label>
               <div className="flex flex-wrap gap-2">
-                {SUBJECTS.map((s) => (
+                {subjects.map((s) => (
                   <button
                     type="button"
                     key={s.code}

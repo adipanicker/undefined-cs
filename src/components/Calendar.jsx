@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "../lib/supabase";
-import { SUBJECTS, TYPES } from "../lib/constants";
+import { TYPES } from "../lib/constants";
+import { useSemester } from "../context/SemesterContext";
 import { prettyDate, todayStr } from "../lib/dates";
 
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -52,6 +53,7 @@ const byPriority = (a, b) =>
 export default function Calendar({ version = 0 }) {
   const now = new Date();
   const today = todayStr();
+  const { semester, getSubject } = useSemester();
 
   const [cursor, setCursor] = useState(() => {
     const n = new Date();
@@ -71,6 +73,7 @@ export default function Calendar({ version = 0 }) {
     supabase
       .from("heads_ups")
       .select("id, subject, type, title, event_date")
+      .eq("semester_id", semester.id)
       .gte("event_date", first)
       .lte("event_date", end)
       .order("event_date")
@@ -87,7 +90,7 @@ export default function Calendar({ version = 0 }) {
     return () => {
       cancelled = true;
     };
-  }, [y, m, version]);
+  }, [y, m, version, semester.id]);
 
   const byDate = useMemo(() => {
     const map = {};
@@ -241,7 +244,7 @@ export default function Calendar({ version = 0 }) {
             ) : (
               selectedEvents.map((e) => {
                 const type = TYPES.find((t) => t.code === e.type);
-                const subject = SUBJECTS.find((s) => s.code === e.subject);
+                const subject = getSubject(e.subject);
                 return (
                   <div
                     key={e.id}
@@ -263,7 +266,7 @@ export default function Calendar({ version = 0 }) {
                         border: "2px solid var(--line)",
                       }}
                     >
-                      {subject?.code === "OTHER" ? "Others" : subject?.code}
+                      {subject?.short_label}
                     </span>
                   </div>
                 );

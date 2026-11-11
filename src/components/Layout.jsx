@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../lib/theme";
 import { needsSetup, SETUP_KEY } from "../lib/pwa";
 import { ensurePushSubscription } from "../lib/push";
+import { useSemester } from "../context/SemesterContext";
 import Avatar from "./Avatar";
 import DailyReward from "./DailyReward";
 import Onboarding from "./Onboarding";
@@ -20,6 +21,7 @@ export default function Layout() {
   const [rewardDone, setRewardDone] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const { profile } = useAuth();
+  const { semester, ready, error: semesterError } = useSemester();
   const [theme, toggleTheme] = useTheme();
 
   const markRewardDone = useCallback(() => setRewardDone(true), []);
@@ -62,14 +64,32 @@ export default function Layout() {
         >
           ☰
         </button>
-        <div className="text-xl font-bold">undefined.cs</div>
+        <div className="text-center leading-tight">
+          <div className="text-xl font-bold">undefined.cs</div>
+          {semester && (
+            <div
+              className="text-xs font-semibold"
+              style={{ color: "var(--muted)" }}
+            >
+              Semester {semester.number}
+            </div>
+          )}
+        </div>
         <NavLink to="/profile" aria-label="Profile">
           <Avatar avatar={profile.avatar} size={40} />
         </NavLink>
       </header>
 
       <main className="mx-auto max-w-md px-4 py-5">
-        <Outlet />
+        {!ready ? (
+          <div className="py-10 text-center text-4xl">⏳</div>
+        ) : semesterError || !semester ? (
+          <div className="alert">
+            Couldn't load the semester. Refresh and try again
+          </div>
+        ) : (
+          <Outlet />
+        )}
       </main>
 
       <AnimatePresence>

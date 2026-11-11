@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { parseAvatar } from "../lib/constants";
+
 import NotificationsCard from "../components/NotificationsCard";
 import Avatar from "../components/Avatar";
 import AvatarPicker from "../components/AvatarPicker";
@@ -20,11 +21,14 @@ const MONTHS = [
   "Nov",
   "Dec",
 ];
+
 const MEDALS = ["🥇", "🥈", "🥉"];
+
 const digitsOnly = (v, max) => v.replace(/\D/g, "").slice(0, max);
 
 export default function Profile() {
   const { profile, refreshProfile, signOut } = useAuth();
+
   const start = parseAvatar(profile.avatar);
 
   const [name, setName] = useState(profile.name);
@@ -32,33 +36,44 @@ export default function Profile() {
   const [color, setColor] = useState(start.color);
   const [month, setMonth] = useState(profile.birth_month ?? "");
   const [day, setDay] = useState(profile.birth_day ?? "");
+
   const [msg, setMsg] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [top, setTop] = useState([]);
 
+  const [board, setBoard] = useState([]);
+  const [showBoard, setShowBoard] = useState(false);
+
+  // Fetch leaderboard
   useEffect(() => {
     supabase
       .from("profiles")
       .select("id, name, avatar, points")
       .order("points", { ascending: false })
       .order("created_at", { ascending: true })
-      .limit(3)
-      .then(({ data }) => setTop(data ?? []));
+      .then(({ data }) => setBoard(data ?? []));
   }, []);
 
+  // Save profile
   async function handleSave(e) {
     e.preventDefault();
     setMsg(null);
 
-    if (!name.trim())
-      return setMsg({ ok: false, text: "Name cannot be empty" });
+    if (!name.trim()) {
+      return setMsg({
+        ok: false,
+        text: "Name cannot be empty",
+      });
+    }
 
     let d = null;
     let m = null;
+
     if (day || month) {
       d = Number(day);
       m = Number(month);
+
       const maxDay = m ? new Date(2024, m, 0).getDate() : 0;
+
       if (!m || !d || d < 1 || d > maxDay) {
         return setMsg({
           ok: false,
@@ -68,6 +83,7 @@ export default function Profile() {
     }
 
     setSaving(true);
+
     const { error } = await supabase
       .from("profiles")
       .update({
@@ -80,16 +96,47 @@ export default function Profile() {
 
     if (error) {
       setSaving(false);
-      return setMsg({ ok: false, text: "Could not save. Try again" });
+      return setMsg({
+        ok: false,
+        text: "Could not save. Try again",
+      });
     }
+
     await refreshProfile();
+
     setSaving(false);
-    setMsg({ ok: true, text: "Saved ✨" });
+    setMsg({
+      ok: true,
+      text: "Saved ✨",
+    });
   }
 
-  const ranked = top.map((p, i) => ({ ...p, rank: i }));
+  // Leaderboard calculations
+  const top = board.slice(0, 3);
+
+  const rankOf = (p) => board.findIndex((b) => b.points === p.points) + 1;
+
+  const me = board.find((b) => b.id === profile.id);
+
+  const above = me
+    ? [...board].reverse().find((b) => b.points > me.points)
+    : null;
+
+  const nudge =
+    !me || board[0]?.points === 0
+      ? null
+      : above
+        ? `${above.points - me.points + 1} XP to pass ${above.name} 🏃`
+        : "You're leading the class! 🔥";
+
+  const ranked = top.map((p, i) => ({
+    ...p,
+    rank: i,
+  }));
+
   const podium =
     ranked.length === 3 ? [ranked[1], ranked[0], ranked[2]] : ranked;
+
   const nobodyYet = top.length === 0 || top[0].points === 0;
 
   return (
@@ -131,6 +178,59 @@ export default function Profile() {
                 <div className="text-sm">{p.points} XP</div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+      <div className="card space-y-3 p-4">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between text-left"
+          onClick={() => setShowBoard((v) => !v)}
+          aria-expanded={showBoard}
+        >
+          <span className="text-lg font-bold">📊 Full leaderboard</span>
+          <span
+            className="text-sm font-semibold"
+            style={{ color: "var(--muted)" }}
+          >
+            {me ? `You're #${rankOf(me)} ` : ""}
+            {showBoard ? "▲" : "▼"}
+          </span>
+        </button>
+
+        {nudge && (
+          <p className="font-medium" style={{ color: "var(--muted)" }}>
+            {nudge}
+          </p>
+        )}
+
+        {showBoard && (
+          <div className="space-y-2">
+            {board.map((p) => {
+              const isMe = p.id === profile.id;
+              const rank = rankOf(p);
+              return (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-3 rounded-xl px-3 py-2"
+                  style={{
+                    border: "2.5px solid var(--line)",
+                    background: isMe ? "var(--yellow)" : "var(--bg)",
+                    color: isMe ? "var(--on-pastel)" : "var(--ink)",
+                  }}
+                >
+                  <span className="w-8 shrink-0 text-center font-bold">
+                    {rank <= 3 && p.points > 0 ? MEDALS[rank - 1] : rank}
+                  </span>
+                  <Avatar avatar={p.avatar} size={36} />
+                  <span className="min-w-0 flex-1 truncate font-semibold">
+                    {p.name}
+                    {isMe ? " (you)" : ""}
+                  </span>
+                  <span className="shrink-0 font-bold">⭐ {p.points}</span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

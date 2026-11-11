@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
-import { SUBJECTS, TYPES } from "../lib/constants";
+import { TYPES } from "../lib/constants";
+import { useSemester } from "../context/SemesterContext";
 import { daysFromToday, dueLabel, prettyDate, timeAgo } from "../lib/dates";
 import Avatar from "./Avatar";
 
@@ -10,8 +11,9 @@ export default function HeadsUpCard({
   onEdit,
   onDeleted,
 }) {
+  const { getSubject } = useSemester();
   const type = TYPES.find((t) => t.code === item.type);
-  const subject = SUBJECTS.find((s) => s.code === item.subject);
+  const subject = getSubject(item.subject);
   const days = item.event_date ? daysFromToday(item.event_date) : null;
   const urgent = days !== null && days <= 2;
 
@@ -44,7 +46,7 @@ export default function HeadsUpCard({
             border: "2.5px solid var(--line)",
           }}
         >
-          {subject?.emoji} {subject?.label}
+          {subject?.emoji} {subject?.short_label ?? item.subject}
         </span>
         {item.event_date && (
           <span
@@ -74,7 +76,7 @@ export default function HeadsUpCard({
           </div>
         )}
         {item.description && (
-          <p className="mt-2 whitespace-pre-wrap wrap-break-word">
+          <p className="mt-2 whitespace-pre-wrap break-words">
             {item.description}
           </p>
         )}

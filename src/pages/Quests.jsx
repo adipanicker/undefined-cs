@@ -2,15 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
-import { SUBJECTS, TYPES, XP_BY_TYPE, ATTEND_TYPES } from "../lib/constants";
+import { useSemester } from "../context/SemesterContext";
+import { TYPES, XP_BY_TYPE, ATTEND_TYPES } from "../lib/constants";
 import { daysFromToday, dueLabel, prettyDate } from "../lib/dates";
 
-const subjectName = (s) =>
-  s.code === "LAB" ? "Lab" : s.code === "OTHER" ? "Others" : s.label;
+const OPEN_KEY = "undefined-cs-subjects-open";
 
 function QuestCard({ item, busy, onDone, onSkip }) {
+  const { getSubject } = useSemester();
   const type = TYPES.find((t) => t.code === item.type);
-  const subject = SUBJECTS.find((s) => s.code === item.subject);
+  const subject = getSubject(item.subject);
   const days = daysFromToday(item.event_date);
   const attend = ATTEND_TYPES.includes(item.type);
   const locked = attend && days > 0;
@@ -41,7 +42,7 @@ function QuestCard({ item, busy, onDone, onSkip }) {
             border: "2.5px solid var(--line)",
           }}
         >
-          {subject?.emoji} {subject && subjectName(subject)}
+          {subject?.emoji} {subject?.short_label}
         </span>
         <span
           className="rounded-full px-3 py-1 text-sm font-semibold"
@@ -94,7 +95,8 @@ function QuestCard({ item, busy, onDone, onSkip }) {
 }
 
 function DoneRow({ item, mark, busy, onUndo }) {
-  const subject = SUBJECTS.find((s) => s.code === item.subject);
+  const { getSubject } = useSemester();
+  const subject = getSubject(item.subject);
   const done = mark.status === "done";
 
   return (
@@ -109,7 +111,7 @@ function DoneRow({ item, mark, busy, onUndo }) {
       <div className="min-w-0 flex-1">
         <div className="truncate font-semibold">{item.title}</div>
         <div className="text-xs" style={{ color: "var(--muted)" }}>
-          {subject && subjectName(subject)} ·{" "}
+          {subject?.short_label} ·{" "}
           {done ? (mark.xp > 0 ? `+${mark.xp} XP` : "Done") : "Skipped"}
         </div>
       </div>
@@ -126,6 +128,9 @@ function DoneRow({ item, mark, busy, onUndo }) {
 
 export default function Quests() {
   const { profile, refreshProfile } = useAuth();
+  const { semester, subjects, getSubject } = useSemester();
+  const semesterId = semester.id;
+
   const [items, setItems] = useState([]);
   const [marks, setMarks] = useState({});
   const [loaded, setLoaded] = useState(false);
@@ -134,15 +139,36 @@ export default function Quests() {
   const [showDone, setShowDone] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [toast, setToast] = useState(null);
+  const [subjectsOpen, setSubjectsOpen] = useState(() => {
+    try {
+      return localStorage.getItem(OPEN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  function toggleSubjects() {
+    const next = !subjectsOpen;
+    try {
+      localStorage.setItem(OPEN_KEY, next ? "1" : "0");
+    } catch {
+      // preference just won't be remembered
+    }
+    setSubjectsOpen(next);
+  }
 
   const load = useCallback(async () => {
     const [hu, cp] = await Promise.all([
       supabase
         .from("heads_ups")
         .select("id, subject, type, title, event_date")
+        .eq("semester_id", semesterId)
         .not("event_date", "is", null)
         .order("event_date"),
-      supabase.from("completions").select("heads_up_id, status, xp"),
+      supabase
+        .from("completions")
+        .select("heads_up_id, status, xp")
+        .eq("semester_id", semesterId),
     ]);
     if (hu.error || cp.error) {
       setLoadError(true);
@@ -152,7 +178,7 @@ export default function Quests() {
       setLoadError(false);
     }
     setLoaded(true);
-  }, []);
+  }, [semesterId]);
 
   useEffect(() => {
     load();
@@ -212,16 +238,17 @@ export default function Quests() {
 
   const stats = useMemo(() => {
     const s = Object.fromEntries(
-      SUBJECTS.map((sub) => [sub.code, { total: 0, done: 0 }]),
+      subjects.map((sub) => [sub.code, { total: 0, done: 0 }]),
     );
     for (const i of items) {
+      if (!s[i.subject]) continue;
       const st = marks[i.id]?.status;
       if (st === "ignored") continue;
       s[i.subject].total++;
       if (st === "done") s[i.subject].done++;
     }
     return s;
-  }, [items, marks]);
+  }, [items, marks, subjects]);
 
   const totalAll = Object.values(stats).reduce((a, s) => a + s.total, 0);
   const doneAll = Object.values(stats).reduce((a, s) => a + s.done, 0);
@@ -230,6 +257,7 @@ export default function Quests() {
   const visible = items.filter((i) => filter === "ALL" || i.subject === filter);
   const todo = visible.filter((i) => !marks[i.id]);
   const finished = visible.filter((i) => marks[i.id]).reverse();
+  const activeSubject = filter === "ALL" ? null : getSubject(filter);
 
   if (!loaded) return <div className="py-10 text-center text-4xl">⏳</div>;
 
@@ -279,58 +307,111 @@ export default function Quests() {
         </div>
       </div>
 
-      <div className="card space-y-1 p-3">
-        <div className="px-2 pb-1">
-          <h2 className="text-lg font-bold">📚 By subject</h2>
-          <p className="text-sm" style={{ color: "var(--muted)" }}>
-            {filter === "ALL"
-              ? "Tap a subject to filter the list"
-              : "Tap it again to clear the filter"}
-          </p>
-        </div>
-        {SUBJECTS.map((s) => {
-          const st = stats[s.code];
-          const p = st.total ? (st.done / st.total) * 100 : 0;
-          return (
-            <button
-              key={s.code}
-              type="button"
-              className="flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-left"
-              style={{
-                outline: filter === s.code ? "3px solid var(--ink)" : "none",
-                outlineOffset: 1,
-              }}
-              onClick={() => setFilter((f) => (f === s.code ? "ALL" : s.code))}
-            >
-              <span className="w-24 shrink-0 font-semibold">
-                {s.emoji} {subjectName(s)}
-              </span>
-              <div
-                className="h-3 flex-1 overflow-hidden rounded-full"
-                style={{
-                  background: "var(--bg)",
-                  border: "2px solid var(--line)",
-                }}
-              >
-                <div
-                  className="h-full"
+      <div className="card p-3">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between px-2 py-1 text-left"
+          onClick={toggleSubjects}
+          aria-expanded={subjectsOpen}
+        >
+          <span className="text-lg font-bold">📚 By subject</span>
+          <span
+            className="text-sm font-semibold"
+            style={{ color: "var(--muted)" }}
+          >
+            {subjectsOpen ? "Hide ▲" : "Show ▼"}
+          </span>
+        </button>
+
+        {!subjectsOpen && (
+          <div className="no-scrollbar -mx-1 mt-1 flex gap-2 overflow-x-auto p-2">
+            {subjects.map((s) => {
+              const st = stats[s.code];
+              return (
+                <button
+                  key={s.code}
+                  type="button"
+                  className="chip shrink-0 text-sm"
+                  style={{ padding: "0.4rem 0.8rem" }}
+                  aria-pressed={filter === s.code}
+                  onClick={() =>
+                    setFilter((f) => (f === s.code ? "ALL" : s.code))
+                  }
+                >
+                  {s.emoji} {s.short_label}
+                  {st.total ? ` ${st.done}/${st.total}` : ""}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {subjectsOpen && (
+          <div className="mt-2 space-y-1">
+            <p className="px-2 pb-1 text-sm" style={{ color: "var(--muted)" }}>
+              {filter === "ALL"
+                ? "Tap a subject to filter the list"
+                : "Tap it again to clear the filter"}
+            </p>
+            {subjects.map((s) => {
+              const st = stats[s.code];
+              const p = st.total ? (st.done / st.total) * 100 : 0;
+              return (
+                <button
+                  key={s.code}
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-left"
                   style={{
-                    width: `${p}%`,
-                    background: s.color,
-                    transition: "width 0.3s",
+                    outline:
+                      filter === s.code ? "3px solid var(--ink)" : "none",
+                    outlineOffset: 1,
                   }}
-                />
-              </div>
-              <span className="w-12 shrink-0 text-right text-sm font-semibold">
-                {st.total ? `${st.done}/${st.total}` : "–"}
-              </span>
-            </button>
-          );
-        })}
+                  onClick={() =>
+                    setFilter((f) => (f === s.code ? "ALL" : s.code))
+                  }
+                >
+                  <span className="w-24 shrink-0 font-semibold">
+                    {s.emoji} {s.short_label}
+                  </span>
+                  <div
+                    className="h-3 flex-1 overflow-hidden rounded-full"
+                    style={{
+                      background: "var(--bg)",
+                      border: "2px solid var(--line)",
+                    }}
+                  >
+                    <div
+                      className="h-full"
+                      style={{
+                        width: `${p}%`,
+                        background: s.color,
+                        transition: "width 0.3s",
+                      }}
+                    />
+                  </div>
+                  <span className="w-12 shrink-0 text-right text-sm font-semibold">
+                    {st.total ? `${st.done}/${st.total}` : "–"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-xl font-bold">📝 To do ({todo.length})</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-xl font-bold">📝 To do ({todo.length})</h2>
+          {activeSubject && (
+            <button
+              className="chip shrink-0 text-sm"
+              style={{ padding: "0.3rem 0.7rem" }}
+              onClick={() => setFilter("ALL")}
+            >
+              {activeSubject.emoji} {activeSubject.short_label} ✕
+            </button>
+          )}
+        </div>
 
         {todo.length === 0 && (
           <div className="card p-6 text-center">

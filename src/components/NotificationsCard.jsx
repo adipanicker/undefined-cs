@@ -81,7 +81,7 @@ export default function NotificationsCard() {
         onClick={toggleEmail}
         aria-pressed={emailOn}
       >
-        <span>✉️ Email me new heads-ups</span>
+        <span>✉️ Email me updates</span>
         <span
           className="rounded-full px-3 py-1 text-sm"
           style={{

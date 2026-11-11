@@ -29,17 +29,6 @@ export function parseAvatar(avatar) {
   return { emoji, color };
 }
 
-export const SUBJECTS = [
-  { code: "AML", label: "AML", emoji: "🤖", color: "#C4B8FF" },
-  { code: "ADM", label: "ADM", emoji: "🗄️", color: "#9AD1F5" },
-  { code: "IPR", label: "IPR", emoji: "📘", color: "#FFB5C5" },
-  { code: "MAT", label: "MAT", emoji: "📐", color: "#FFD966" },
-  { code: "CC", label: "CC", emoji: "🖥️", color: "#8FCB9B" },
-  { code: "PR", label: "PR", emoji: "🔍", color: "#FF8A4C" },
-  { code: "LAB", label: "Computing Lab", emoji: "💻", color: "#B8E0D2" },
-  { code: "OTHER", label: "Others", emoji: "🎈", color: "#F2C6FF" },
-];
-
 export const TYPES = [
   { code: "assignment", label: "Assignment", emoji: "📝" },
   { code: "report", label: "Report", emoji: "📄" },

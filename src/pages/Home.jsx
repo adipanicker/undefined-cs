@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
-import { SUBJECTS } from "../lib/constants";
+import { useSemester } from "../context/SemesterContext";
 import { todayStr } from "../lib/dates";
 import Avatar from "../components/Avatar";
 import AddHeadsUp from "../components/AddHeadsUp";
 import HeadsUpCard from "../components/HeadsUpCard";
 import Calendar from "../components/Calendar";
-import { Link } from "react-router-dom";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -18,7 +18,9 @@ function getGreeting() {
 
 export default function Home() {
   const { profile, refreshProfile } = useAuth();
+  const { semester, subjects } = useSemester();
   const g = getGreeting();
+  const semesterId = semester.id;
 
   const [items, setItems] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -27,13 +29,14 @@ export default function Home() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [remaining, setRemaining] = useState(null);
   const [version, setVersion] = useState(0);
+  const [remaining, setRemaining] = useState(null);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from("heads_ups")
       .select("*, author:profiles!heads_ups_created_by_fkey(name, avatar)")
+      .eq("semester_id", semesterId)
       .or(`event_date.gte.${todayStr()},event_date.is.null`)
       .order("created_at", { ascending: false });
 
@@ -45,23 +48,7 @@ export default function Home() {
     }
     setLoaded(true);
     setVersion((v) => v + 1);
-  }, []);
-
-  // How many quests are still open (same logic as the My Quests page)
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      supabase.from("heads_ups").select("id").not("event_date", "is", null),
-      supabase.from("completions").select("heads_up_id"),
-    ]).then(([hu, cp]) => {
-      if (cancelled || hu.error || cp.error) return;
-      const handled = new Set(cp.data.map((c) => c.heads_up_id));
-      setRemaining(hu.data.filter((h) => !handled.has(h.id)).length);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [version]);
+  }, [semesterId]);
 
   useEffect(() => {
     load();
@@ -70,6 +57,29 @@ export default function Home() {
   useEffect(() => {
     supabase.rpc("is_admin").then(({ data }) => setIsAdmin(data === true));
   }, []);
+
+  // How many quests are still open (same logic as the My Quests page)
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      supabase
+        .from("heads_ups")
+        .select("id")
+        .eq("semester_id", semesterId)
+        .not("event_date", "is", null),
+      supabase
+        .from("completions")
+        .select("heads_up_id")
+        .eq("semester_id", semesterId),
+    ]).then(([hu, cp]) => {
+      if (cancelled || hu.error || cp.error) return;
+      const handled = new Set(cp.data.map((c) => c.heads_up_id));
+      setRemaining(hu.data.filter((h) => !handled.has(h.id)).length);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [version, semesterId]);
 
   const shown = items
     .filter((i) => filter === "ALL" || i.subject === filter)
@@ -81,7 +91,14 @@ export default function Home() {
       return 0;
     });
 
-  const questLabel = "🎯 My Quests →";
+  const questLabel =
+    remaining === null
+      ? "🎯 My Quests →"
+      : remaining === 0
+        ? "🎉 All caught up · view quests"
+        : `🎯 ${remaining} ${remaining === 1 ? "quest" : "quests"} left · ${
+            remaining === 1 ? "knock it out" : "knock them out"
+          } →`;
 
   return (
     <div className="space-y-5">
@@ -110,7 +127,7 @@ export default function Home() {
 
       <Calendar version={version} />
 
-      <button className="btn w-full text-lg " onClick={() => setAdding(true)}>
+      <button className="btn w-full text-lg" onClick={() => setAdding(true)}>
         ＋ Drop a heads-up
       </button>
 
@@ -118,7 +135,7 @@ export default function Home() {
         <h2 className="mb-3 text-xl font-bold">📣 Upcoming wall</h2>
 
         <div className="no-scrollbar -mx-1 mb-4 flex gap-2 overflow-x-auto p-2">
-          {[{ code: "ALL", label: "All", emoji: "✨" }, ...SUBJECTS].map(
+          {[{ code: "ALL", label: "All", emoji: "✨" }, ...subjects].map(
             (s) => (
               <button
                 key={s.code}
@@ -127,7 +144,7 @@ export default function Home() {
                 aria-pressed={filter === s.code}
                 onClick={() => setFilter(s.code)}
               >
-                {s.emoji} {s.label}
+                {s.emoji} {s.short_label ?? s.label}
               </button>
             ),
           )}
