@@ -133,7 +133,7 @@ export default function Signup() {
           <label className="label">First name</label>
           <input
             className="input"
-            placeholder="Aditya"
+            placeholder="eg. Aditya"
             maxLength={30}
             value={form.name}
             onChange={(e) => set("name", e.target.value)}

@@ -1,0 +1,12 @@
+{
+  "type": "INSERT",
+  "table": "heads_ups",
+  "record": {
+    "id": "curl-test",
+    "subject": "AML",
+    "type": "series",
+    "title": "Curl test",
+    "event_date": "2026-11-20",
+    "created_by": "00000000-0000-0000-0000-000000000000"
+  }
+}
