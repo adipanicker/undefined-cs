@@ -141,7 +141,10 @@ export default function Signup() {
         </div>
 
         <div>
-          <label className="label">Email (for PIN recovery)</label>
+          <label className="label">
+            Email (for PIN recovery & update notifications) 100% SAFE trust guys
+            😭
+          </label>
           <input
             className="input"
             type="email"
