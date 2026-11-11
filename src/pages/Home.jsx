@@ -25,6 +25,8 @@ export default function Home() {
   const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState("ALL");
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [remaining, setRemaining] = useState(null);
   const [version, setVersion] = useState(0);
 
@@ -64,6 +66,10 @@ export default function Home() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    supabase.rpc("is_admin").then(({ data }) => setIsAdmin(data === true));
+  }, []);
 
   const shown = items
     .filter((i) => filter === "ALL" || i.subject === filter)
@@ -149,6 +155,8 @@ export default function Home() {
               key={item.id}
               item={item}
               mine={item.created_by === profile.id}
+              canEdit={isAdmin || item.created_by === profile.id}
+              onEdit={() => setEditing(item)}
               onDeleted={() => {
                 load();
                 refreshProfile();
@@ -159,8 +167,12 @@ export default function Home() {
       </div>
 
       <AddHeadsUp
-        open={adding}
-        onClose={() => setAdding(false)}
+        open={adding || !!editing}
+        editing={editing}
+        onClose={() => {
+          setAdding(false);
+          setEditing(null);
+        }}
         onAdded={load}
       />
     </div>

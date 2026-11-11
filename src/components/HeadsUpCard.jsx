@@ -3,19 +3,34 @@ import { SUBJECTS, TYPES } from "../lib/constants";
 import { daysFromToday, dueLabel, prettyDate, timeAgo } from "../lib/dates";
 import Avatar from "./Avatar";
 
-export default function HeadsUpCard({ item, mine, onDeleted }) {
+export default function HeadsUpCard({
+  item,
+  mine,
+  canEdit,
+  onEdit,
+  onDeleted,
+}) {
   const type = TYPES.find((t) => t.code === item.type);
   const subject = SUBJECTS.find((s) => s.code === item.subject);
   const days = item.event_date ? daysFromToday(item.event_date) : null;
   const urgent = days !== null && days <= 2;
 
   async function handleDelete() {
-    if (!window.confirm("Delete this heads-up for everyone?")) return;
-    const { error } = await supabase
+    const who = mine ? "your" : `${item.author?.name ?? "someone's"}'s`;
+    if (!window.confirm(`Delete ${who} heads-up "${item.title}" for everyone?`))
+      return;
+
+    const { data, error } = await supabase
       .from("heads_ups")
       .delete()
-      .eq("id", item.id);
-    if (!error) onDeleted();
+      .eq("id", item.id)
+      .select("id");
+
+    if (error || !data || data.length === 0) {
+      window.alert("Couldn't delete this one");
+      return;
+    }
+    onDeleted();
   }
 
   return (
@@ -72,15 +87,28 @@ export default function HeadsUpCard({ item, mine, onDeleted }) {
         <Avatar avatar={item.author?.avatar} size={28} />
         <span className="font-semibold">{item.author?.name ?? "Someone"}</span>
         <span>· {timeAgo(item.created_at)}</span>
-        {mine && (
-          <button
-            className="ml-auto text-lg"
-            onClick={handleDelete}
-            aria-label="Delete heads-up"
-          >
-            🗑️
-          </button>
-        )}
+        {item.updated_at && <span>· ✏️ edited {timeAgo(item.updated_at)}</span>}
+
+        <div className="ml-auto flex items-center gap-3">
+          {canEdit && (
+            <button
+              className="text-lg"
+              onClick={onEdit}
+              aria-label="Edit heads-up"
+            >
+              ✏️
+            </button>
+          )}
+          {canEdit && (
+            <button
+              className="text-lg"
+              onClick={handleDelete}
+              aria-label="Delete heads-up"
+            >
+              🗑️
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../context/AuthContext";
 import { notifPermission, pushSupported } from "../lib/pwa";
 import {
   ensurePushSubscription,
@@ -7,10 +9,13 @@ import {
 } from "../lib/push";
 
 export default function NotificationsCard() {
+  const { profile, refreshProfile } = useAuth();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [savingEmail, setSavingEmail] = useState(false);
   const perm = notifPermission();
   const on = pushSupported() && perm === "granted";
+  const emailOn = profile.email_notify !== false;
 
   async function test() {
     setBusy(true);
@@ -37,11 +42,22 @@ export default function NotificationsCard() {
     );
   }
 
+  async function toggleEmail() {
+    setSavingEmail(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ email_notify: !emailOn })
+      .eq("id", profile.id);
+    if (!error) await refreshProfile();
+    setSavingEmail(false);
+  }
+
   return (
-    <div className="card space-y-3 p-5">
+    <div className="card space-y-4 p-5">
       <h2 className="text-lg font-bold">🔔 Notifications</h2>
+
       {on ? (
-        <>
+        <div className="space-y-3">
           <p style={{ color: "var(--muted)" }}>
             You'll be pinged when someone drops a heads-up. Not seeing them?
             Send yourself a test.
@@ -49,13 +65,35 @@ export default function NotificationsCard() {
           <button className="btn w-full" disabled={busy} onClick={test}>
             {busy ? "Sending…" : "Send me a test 🔔"}
           </button>
-        </>
+        </div>
       ) : (
         <p style={{ color: "var(--muted)" }}>
-          Notifications are off on this device. Open the menu and tap{" "}
+          Push is off on this device. Open the menu and tap{" "}
           <b>📲 Install & notifications</b>.
         </p>
       )}
+
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left font-semibold"
+        style={{ border: "2.5px solid var(--line)", background: "var(--bg)" }}
+        disabled={savingEmail}
+        onClick={toggleEmail}
+        aria-pressed={emailOn}
+      >
+        <span>✉️ Email me new heads-ups</span>
+        <span
+          className="rounded-full px-3 py-1 text-sm"
+          style={{
+            background: emailOn ? "var(--mint)" : "var(--surface)",
+            color: emailOn ? "var(--on-pastel)" : "var(--ink)",
+            border: "2.5px solid var(--line)",
+          }}
+        >
+          {emailOn ? "On" : "Off"}
+        </span>
+      </button>
+
       {msg && (
         <div
           className="alert"

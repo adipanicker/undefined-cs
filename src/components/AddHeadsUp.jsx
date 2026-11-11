@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { SUBJECTS, TYPES } from "../lib/constants";
@@ -12,10 +12,27 @@ const EMPTY = {
   date: "",
 };
 
-export default function AddHeadsUp({ open, onClose, onAdded }) {
+export default function AddHeadsUp({ open, onClose, onAdded, editing = null }) {
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Fill the form each time the sheet opens (blank for new, existing values for edit)
+  useEffect(() => {
+    if (!open) return;
+    setError("");
+    setForm(
+      editing
+        ? {
+            type: editing.type,
+            subject: editing.subject,
+            title: editing.title,
+            description: editing.description ?? "",
+            date: editing.event_date ?? "",
+          }
+        : EMPTY,
+    );
+  }, [open, editing]);
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const needsDate = form.type !== "info";
@@ -34,18 +51,38 @@ export default function AddHeadsUp({ open, onClose, onAdded }) {
     if (!form.title.trim()) return setError("Give it a title");
     if (needsDate && !form.date) return setError("Pick a date");
 
-    setSaving(true);
-    const { error: insertError } = await supabase.from("heads_ups").insert({
+    const fields = {
       subject: form.subject,
       type: form.type,
       title: form.title.trim(),
       description: form.description.trim() || null,
       event_date: needsDate ? form.date : null,
-    });
-    setSaving(false);
+    };
 
-    if (insertError) return setError("Could not post. Try again");
-    setForm(EMPTY);
+    setSaving(true);
+    let failed = false;
+
+    if (editing) {
+      const { data, error: updateError } = await supabase
+        .from("heads_ups")
+        .update(fields)
+        .eq("id", editing.id)
+        .select("id");
+      if (updateError) failed = true;
+      else if (!data || data.length === 0) {
+        setSaving(false);
+        return setError("You can't edit this one");
+      }
+    } else {
+      const { error: insertError } = await supabase
+        .from("heads_ups")
+        .insert(fields);
+      if (insertError) failed = true;
+    }
+
+    setSaving(false);
+    if (failed) return setError("Could not save. Try again");
+
     onAdded();
     onClose();
   }
@@ -79,7 +116,9 @@ export default function AddHeadsUp({ open, onClose, onAdded }) {
             transition={{ type: "tween", duration: 0.2 }}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold">📣 Drop a heads-up</h2>
+              <h2 className="text-xl font-bold">
+                {editing ? "✏️ Edit heads-up" : "📣 Drop a heads-up"}
+              </h2>
               <button
                 type="button"
                 className="text-2xl"
@@ -156,7 +195,7 @@ export default function AddHeadsUp({ open, onClose, onAdded }) {
                 <input
                   className="input"
                   type="date"
-                  min={todayStr()}
+                  min={editing ? undefined : todayStr()}
                   value={form.date}
                   onChange={(e) => set("date", e.target.value)}
                 />
@@ -166,7 +205,11 @@ export default function AddHeadsUp({ open, onClose, onAdded }) {
             {error && <div className="alert">{error}</div>}
 
             <button className="btn w-full" disabled={saving}>
-              {saving ? "Posting…" : "Post to the class →"}
+              {saving
+                ? "Saving…"
+                : editing
+                  ? "Save changes ✨"
+                  : "Post to the class →"}
             </button>
           </motion.form>
         </>
